@@ -252,6 +252,46 @@ class GlobalPlannerDijkstra(Node):
         path.reverse()  # Del inicio al objetivo
         return path
 
+    def generate_waypoints(self, path_grid, spacing_meters=0.5):
+        """
+        Genera waypoints espaciados uniformemente a lo largo del camino.
+        
+        Args:
+            path_grid (list): Lista de tuplas (i, j) del camino en grilla
+            spacing_meters (float): Distancia en metros entre waypoints
+            
+        Returns:
+            list: Lista de tuplas (i, j) representando waypoints espaciados
+        """
+        if not path_grid or len(path_grid) < 2:
+            return path_grid
+        
+        waypoints = [path_grid[0]]  # Siempre incluir el punto inicial
+        accumulated_dist = 0.0
+        
+        for i in range(len(path_grid) - 1):
+            current = path_grid[i]
+            next_point = path_grid[i + 1]
+            
+            # Convertir a coordenadas del mundo para calcular distancia real
+            x1, y1 = self.grid_to_world(current[0], current[1])
+            x2, y2 = self.grid_to_world(next_point[0], next_point[1])
+            
+            # Distancia euclidiana del segmento
+            segment_length = np.hypot(x2 - x1, y2 - y1)
+            accumulated_dist += segment_length
+            
+            # Agregar waypoint cuando se alcanza el espaciado deseado
+            if accumulated_dist >= spacing_meters:
+                waypoints.append(next_point)
+                accumulated_dist = 0.0
+        
+        # Siempre incluir el objetivo final
+        if waypoints[-1] != path_grid[-1]:
+            waypoints.append(path_grid[-1])
+        
+        return waypoints
+
     def plan_path(self):
         """
         Planifica la trayectoria usando Dijkstra y publica el resultado.
@@ -300,12 +340,16 @@ class GlobalPlannerDijkstra(Node):
         
         self.get_logger().info(f'Camino encontrado con {len(path_grid)} puntos')
         
-        # Convertir el camino de grilla a coordenadas del mundo
+        # Generar waypoints espaciados (0.5 metros por defecto)
+        waypoints_grid = self.generate_waypoints(path_grid, spacing_meters=0.5)
+        self.get_logger().info(f'Waypoints generados: {len(waypoints_grid)} puntos (espaciado 0.5m)')
+        
+        # Convertir los waypoints de grilla a coordenadas del mundo
         path_msg = Path()
         path_msg.header.frame_id = 'map'
         path_msg.header.stamp = self.get_clock().now().to_msg()
         
-        for i, j in path_grid:
+        for i, j in waypoints_grid:
             x, y = self.grid_to_world(i, j)
             
             pose = PoseStamped()

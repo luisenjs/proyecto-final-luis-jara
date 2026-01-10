@@ -13,11 +13,13 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     
-    # Ruta por defecto al mapa generado con SLAM
-    default_map_path = os.path.join(
-        os.path.expanduser('~'),
-        'Desktop/Example/luisjara_ws/src/unitree-go2-ros2/robots/configs/go2_config/maps/map.yaml'
-    )
+    # Ruta al mapa desde el paquete go2_config
+    go2_config_dir = get_package_share_directory('go2_config')
+    default_map_path = os.path.join(go2_config_dir, 'maps', 'map.yaml')
+    
+    # Ruta al archivo de configuración de RViz
+    planner_dir = get_package_share_directory('global_planner')
+    rviz_config_file = os.path.join(planner_dir, 'rviz', 'planner.rviz')
     
     # Argumentos
     declare_map_arg = DeclareLaunchArgument(
@@ -68,10 +70,22 @@ def generate_launch_description():
         ]
     )
     
+    # RViz con configuración predefinida
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_file],
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ]
+    )
+    
     return LaunchDescription([
         declare_map_arg,
         declare_use_sim_time,
         map_server_node,
         lifecycle_manager_node,
-        planner_node
+        planner_node,
+        rviz_node
     ])
