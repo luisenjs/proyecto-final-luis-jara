@@ -26,12 +26,17 @@ class GlobalPlannerDijkstra(Node):
         
         # Variables internas
         self.map_data = None
+        self.map_inflated = None  # Mapa con obstáculos inflados
         self.map_resolution = None
         self.map_origin = None
         self.map_width = None
         self.map_height = None
         self.current_pose = None
         self.goal_pose = None
+        
+        # Parámetro de inflado (en metros)
+        self.declare_parameter('inflation_radius', 0.3)  # 30cm de margen
+        self.inflation_radius = self.get_parameter('inflation_radius').value
         
         # QoS profile para el mapa (transient_local para recibir el último mapa publicado)
         map_qos = QoSProfile(
@@ -83,9 +88,54 @@ class GlobalPlannerDijkstra(Node):
         # Convertir el mapa 1D a matriz 2D
         self.map_data = np.array(msg.data).reshape((self.map_height, self.map_width))
         
+        # Inflar obstáculos para seguridad
+        self.map_inflated = self.inflate_obstacles(self.map_data, self.inflation_radius)
+        
         if not hasattr(self, '_map_received'):
             self.get_logger().info(f'Mapa recibido: {self.map_width}x{self.map_height}, resolución={self.map_resolution}m')
+            self.get_logger().info(f'Radio de inflado: {self.inflation_radius}m')
             self._map_received = True
+
+    def inflate_obstacles(self, map_data, radius_meters):
+        """
+        Infla los obstáculos del mapa para mantener distancia de seguridad.
+        
+        Args:
+            map_data (numpy.ndarray): Mapa original
+            radius_meters (float): Radio de inflado en metros
+            
+        Returns:
+            numpy.ndarray: Mapa con obstáculos inflados
+        """
+        # Calcular radio en celdas
+        radius_cells = int(np.ceil(radius_meters / self.map_resolution))
+        
+        # Copiar mapa original
+        inflated_map = map_data.copy()
+        
+        # Encontrar todas las celdas ocupadas (valor >= 50)
+        occupied_cells = np.argwhere(map_data >= 50)
+        
+        # Para cada celda ocupada, inflar alrededor
+        for i, j in occupied_cells:
+            # Definir región de inflado
+            i_min = max(0, i - radius_cells)
+            i_max = min(self.map_height, i + radius_cells + 1)
+            j_min = max(0, j - radius_cells)
+            j_max = min(self.map_width, j + radius_cells + 1)
+            
+            # Marcar celdas dentro del radio como ocupadas
+            for ii in range(i_min, i_max):
+                for jj in range(j_min, j_max):
+                    # Calcular distancia euclidiana
+                    distance = np.sqrt((ii - i)**2 + (jj - j)**2)
+                    if distance <= radius_cells:
+                        # Marcar como ocupada si estaba libre
+                        if inflated_map[ii, jj] >= 0 and inflated_map[ii, jj] < 50:
+                            inflated_map[ii, jj] = 50  # Ocupada por inflado
+        
+        self.get_logger().info(f'Obstáculos inflados con radio de {radius_cells} celdas ({radius_meters}m)')
+        return inflated_map
 
     def odom_callback(self, msg):
         """
@@ -151,7 +201,7 @@ class GlobalPlannerDijkstra(Node):
 
     def is_free(self, i, j):
         """
-        Verifica si una celda está libre (navegable).
+        Verifica si una celda está libre (navegable) usando el mapa inflado.
         
         Args:
             i (int): Índice fila
@@ -160,11 +210,11 @@ class GlobalPlannerDijkstra(Node):
         Returns:
             bool: True si la celda está libre, False si está ocupada
         """
-        if self.map_data is None:
+        if self.map_inflated is None:
             return False
         
         if 0 <= i < self.map_height and 0 <= j < self.map_width:
-            cell_value = self.map_data[i, j]
+            cell_value = self.map_inflated[i, j]
             # Celda libre: valor < 50, ocupada: >= 50, desconocida: -1
             return cell_value >= 0 and cell_value < 50
         return False

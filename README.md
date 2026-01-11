@@ -16,6 +16,116 @@ Cálculo de trayectorias óptimas usando el algoritmo de Dijkstra sobre el mapa 
 
 ---
 
+## Instalación
+
+### Requisitos del Sistema
+
+**Sistema Operativo:**
+- Ubuntu 22.04 LTS (Jammy Jellyfish)
+
+**Software Base:**
+- ROS 2 Humble Hawksbill
+- Gazebo 11
+- Python 3.10+
+
+### Instalación de Dependencias
+
+**1. Tener previamente instalado ROS 2 Humble:**
+
+**2. Instalar paquetes ROS 2 necesarios:**
+
+```bash
+# Dependencias del robot Unitree Go2
+sudo apt install -y \
+  ros-humble-gazebo-ros2-control \
+  ros-humble-xacro \
+  ros-humble-robot-localization \
+  ros-humble-ros2-controllers \
+  ros-humble-ros2-control \
+  ros-humble-velodyne \
+  ros-humble-velodyne-gazebo-plugins \
+  ros-humble-velodyne-description
+
+# Dependencias para navegación y mapeo
+sudo apt install -y \
+  ros-humble-gazebo-ros-pkgs \
+  ros-humble-navigation2 \
+  ros-humble-nav2-bringup \
+  ros-humble-slam-toolbox \
+  ros-humble-joint-state-publisher \
+  ros-humble-joint-state-publisher-gui \
+  ros-humble-rviz2
+```
+
+**3. Instalar herramientas de desarrollo:**
+
+```bash
+sudo apt install -y \
+  python3-colcon-common-extensions \
+  python3-rosdep \
+  git
+```
+
+**4. Instalar paquetes Python:**
+
+```bash
+pip3 install numpy
+```
+
+### Clonar y Compilar el Proyecto
+
+**1. Clonar el repositorio:**
+
+```bash
+cd ~
+git clone https://github.com/luisenjs/proyecto-final-luis-jara.git
+cd proyecto-final-luis-jara
+```
+
+**2. Inicializar rosdep (solo la primera vez):**
+
+```bash
+sudo rosdep init
+rosdep update
+```
+
+**3. Instalar dependencias del proyecto:**
+
+```bash
+rosdep install --from-paths src --ignore-src -r -y
+```
+
+**4. Compilar el workspace:**
+
+```bash
+colcon build
+```
+
+**5. Cargar el entorno:**
+
+```bash
+source install/setup.bash
+```
+
+### Verificación de la Instalación
+
+Verifica que todo esté instalado correctamente:
+
+```bash
+# Verificar ROS 2
+ros2 --version
+
+# Verificar que los paquetes se compilaron
+ros2 pkg list | grep -E "global_planner|go2_config"
+
+# Verificar Gazebo
+gazebo --version
+```
+
+Si todos los comandos se ejecutan sin errores, la instalación fue exitosa y puedes proceder al mapeo y planificación.
+
+---
+
 ## Mapeo del Entorno
 
 ### Mapa Generado por SLAM
