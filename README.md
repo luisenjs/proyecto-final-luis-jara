@@ -14,6 +14,9 @@ Generación automática del mapa 2D del entorno usando SLAM Toolbox con el robot
 ### 2. Planificación Global
 Cálculo de trayectorias óptimas usando el algoritmo de Dijkstra sobre el mapa de ocupación generado, creando waypoints navegables para el robot.
 
+### 3. Control de Trayectorias con PID
+Seguimiento autónomo de la trayectoria planificada mediante un controlador PID que ajusta las velocidades lineal y angular del robot en tiempo real.
+
 ---
 
 ## Instalación
@@ -321,6 +324,198 @@ ros2 launch global_planner planner_with_map.launch.py map:=/ruta/completa/a/tu_m
 
 ---
 
+## Control de Trayectorias con PID
+
+### Estado Actual del Proyecto
+
+**Componentes Implementados:**
+
+- **Mapeo con SLAM**: Funcional con corrección manual del mapa
+- **Planificación Global**: Dijkstra implementado desde cero, genera trayectorias óptimas
+- **Control PID**: Controlador funcional con métricas en tiempo real
+- **Integración completa**: Sistema end-to-end desde mapeo hasta ejecución
+
+**Problemas Conocidos:**
+
+#### Problemas Críticos
+
+1. **Mapeo con marcos de referencia incorrectos**:
+   - El frame `map` generado por SLAM no se mantiene fijo en el mundo
+   - El robot parece moverse en su lugar mientras el mapa se desplaza
+
+2. **Sincronización de frames en control**:
+   - Desalineación entre las coordenadas del frame `map` (donde se define el objetivo) y el frame `odom` (donde se ubica el robot)
+   - El robot en RViz aparece desplazándose hacia el origen mientras que en Gazebo se mueve normalmente
+   - Las trayectorias planificadas y la odometría del robot no están en el mismo sistema de coordenadas
+
+---
+
+## Notas Adicionales
+
+### Principio de Funcionamiento del Control PID
+4. Aplicar PID lineal → generar velocidad lineal
+5. Aplicar PID angular → generar velocidad angular
+6. Publicar comandos en /cmd_vel
+7. Si llega al waypoint (< 0.3m) → avanzar al siguiente
+8. Si llega al último waypoint → detener y mostrar resumen
+
+
+### Implementación Matemática
+
+**Control PID Lineal (velocidad hacia adelante):**
+
+```python
+# Error = distancia al waypoint objetivo
+error_v = sqrt((goal_x - robot_x)² + (goal_y - robot_y)²)
+
+# Términos PID
+P_v = kp_v * error_v
+I_v = ki_v * integral_v
+D_v = kd_v * (error_v - error_v_prev) / dt
+
+# Comando de velocidad
+v_cmd = P_v + I_v + D_v
+v_cmd = clamp(v_cmd, 0, max_v)  # Limitar a [0, 0.5] m/s
+```
+
+**Control PID Angular (rotación):**
+
+```python
+# Error = diferencia angular hacia el waypoint
+angle_to_goal = atan2(goal_y - robot_y, goal_x - robot_x)
+error_theta = normalize_angle(angle_to_goal - robot_theta)
+
+# Términos PID
+P_w = kp_w * error_theta
+I_w = ki_w * integral_w
+D_w = kd_w * (error_theta - error_theta_prev) / dt
+
+# Comando de rotación
+w_cmd = P_w + I_w + D_w
+w_cmd = clamp(w_cmd, -max_w, max_w)  # Limitar a [-1.0, 1.0] rad/s
+```
+
+### Parámetros del Controlador
+
+**Ganancias PID:**
+
+| Parámetro | Valor | Descripción |
+|-----------|-------|-------------|
+| `kp_v` | 0.5 | Ganancia proporcional velocidad lineal |
+| `ki_v` | 0.0 | Ganancia integral velocidad lineal (desactivada) |
+| `kd_v` | 0.1 | Ganancia derivativa velocidad lineal |
+| `kp_w` | 2.0 | Ganancia proporcional velocidad angular |
+| `ki_w` | 0.0 | Ganancia integral velocidad angular (desactivada) |
+| `kd_w` | 0.3 | Ganancia derivativa velocidad angular |
+
+**Límites de velocidad:**
+
+| Parámetro | Valor | Unidad |
+|-----------|-------|--------|
+| `max_v` | 0.5 | m/s |
+| `max_w` | 1.0 | rad/s |
+
+**Tolerancias:**
+
+| Parámetro | Valor | Descripción |
+|-----------|-------|-------------|
+| `waypoint_tolerance` | 0.3 m | Distancia para considerar alcanzado un waypoint |
+| `goal_tolerance` | 0.25 m | Distancia para considerar alcanzado el objetivo final |
+
+### Estrategia de Control Adaptativo
+
+El controlador implementa una estrategia adaptativa para mejorar el seguimiento de trayectoria:
+
+**Reducción de velocidad en curvas:**
+
+```python
+# Si el error angular es grande (> 0.5 rad ≈ 30°)
+if abs(error_theta) > 0.5:
+    v_cmd *= 0.3  # Reducir velocidad lineal al 30%
+```
+
+**Razón:** Cuando el robot necesita girar bruscamente, reducir la velocidad lineal permite giros más precisos y evita sobrepasar el waypoint.
+
+
+
+### Métricas en Tiempo Real
+
+El controlador muestra métricas actualizadas cada **1 segundo** durante la ejecución:
+
+```
+═══════════════════════════════════════
+     SEGUIMIENTO DE TRAYECTORIA PID
+═══════════════════════════════════════
+⏱️  Tiempo transcurrido: 45.23 s
+📏 Distancia recorrida: 8.34 m
+📍 Waypoint actual: 18/25
+═══════════════════════════════════════
+```
+
+**Métricas monitoreadas:**
+- **Tiempo transcurrido**: Desde que inició el seguimiento de trayectoria
+- **Distancia recorrida**: Acumulada mediante odometría incremental
+- **Waypoint actual**: Progreso en la lista de waypoints
+
+### Resumen Final
+
+Al completar la trayectoria, el controlador muestra un resumen completo:
+
+```
+═══════════════════════════════════════
+     🏁 TRAYECTORIA COMPLETADA 🏁
+═══════════════════════════════════════
+⏱️  Tiempo total: 91.67 s
+📏 Distancia total: 13.26 m
+⚡ Velocidad promedio: 0.14 m/s
+═══════════════════════════════════════
+```
+
+### Uso del Controlador
+
+**Sistema completo (secuencia de lanzamiento):**
+
+```bash
+# Terminal 1 - Lanzar Gazebo con el robot
+ros2 launch go2_config gazebo_velodyne.launch.py world:=small_house
+
+# Terminal 2 - Lanzar planificador con mapa y RViz
+ros2 launch global_planner planner_with_map.launch.py
+
+# Terminal 3 - Lanzar controlador PID
+source install/setup.bash
+ros2 run trajectory_controller pid_controller
+```
+
+**Pasos para ejecutar una trayectoria:**
+
+1. Espera a que RViz abra y muestre el mapa
+2. Verifica que el robot aparezca en su posición inicial
+3. En RViz, haz clic en **"2D Goal Pose"** (barra superior)
+4. Haz clic en el mapa donde quieres que vaya el robot
+5. El planificador calculará la trayectoria (línea roja)
+6. El controlador PID comenzará automáticamente a seguir los waypoints
+7. Observa las métricas en tiempo real en la terminal del controlador
+8. El robot se detendrá automáticamente al alcanzar el objetivo
+
+**Topics del controlador:**
+
+| Topic | Tipo | Dirección | Descripción |
+|-------|------|-----------|-------------|
+| `/global_path` | nav_msgs/Path | Suscrito | Trayectoria planificada con waypoints |
+| `/odom` | nav_msgs/Odometry | Suscrito | Posición y orientación del robot |
+| `/cmd_vel` | geometry_msgs/Twist | Publicado | Comandos de velocidad (v, ω) |
+
+**Archivo principal:** `src/trajectory_controller/trajectory_controller/pid_controller.py`
+
+### Visualización del Control
+
+![Control PID en acción](images/control/pid_control.png)
+
+*Captura mostrando el robot (modelo 3D) siguiendo la trayectoria roja generada por el planificador Dijkstra, con métricas en tiempo real en la terminal.*
+
+---
+
 ## Notas Adicionales
 
 ### Estado Actual del Proyecto
@@ -330,19 +525,22 @@ ros2 launch global_planner planner_with_map.launch.py map:=/ruta/completa/a/tu_m
 Este proyecto se encuentra actualmente en fase de desarrollo y presenta los siguientes problemas conocidos:
 
 #### Problemas Críticos
+**Paquetes ROS 2:**
+```bash
+ros-humble-desktop
+ros-humble-gazebo-ros-pkgs
+ros-humble-navigation2
+ros-humble-slam-toolbox
+ros-humble-robot-localization
+ros-humble-tf2-ros
+```
 
-1. **Mapeo con marcos de referencia incorrectos**:
-   - El frame `map` generado por SLAM no se mantiene fijo en el mundo
-   - El robot parece moverse en su lugar mientras el mapa se desplaza
-   - **Impacto**: Imposibilidad de generar mapas completos automáticamente
-
-### Dependencias del Proyecto
-
-**Sistema:**
-- Ubuntu 22.04 LTS
-- ROS 2 Humble Hawksbill
-- Gazebo 11
-
+**Paquetes Python:**
+- rclpy
+- numpy
+- heapq (biblioteca estándar)
+- math (biblioteca estándar)
+- time (biblioteca estándar)
 **Paquetes ROS 2:**
 ```bash
 ros-humble-desktop
@@ -354,9 +552,6 @@ ros-humble-robot-localization
 
 **Paquetes Python:**
 - rclpy
-- numpy
-- heapq (biblioteca estándar)
-
 ### Compilación del Proyecto
 
 ```bash
@@ -364,3 +559,61 @@ cd ~/proyecto-final-luis-jara
 colcon build
 source install/setup.bash
 ```
+
+### Estructura del Workspace
+
+```
+proyecto-final-luis-jara/
+├── src/
+│   ├── global_planner/          # Planificador Dijkstra
+│   │   ├── global_planner/
+│   │   │   └── global_planner_dijkstra.py
+│   │   ├── launch/
+│   │   │   └── planner_with_map.launch.py
+│   │   └── rviz/
+│   │       └── planner.rviz
+│   ├── trajectory_controller/   # Controlador PID
+│   │   └── trajectory_controller/
+│   │       └── pid_controller.py
+│   ├── unitree-go2-ros2/        # Robot Unitree Go2
+│   │   ├── champ/               # Framework de locomoción
+│   │   └── robots/
+│   │       └── configs/go2_config/
+│   │           ├── maps/        # Mapas generados
+│   │           └── launch/      # Launch files
+│   └── champ_teleop/            # Teleoperación
+└── images/                      # Documentación visual
+    ├── mapping/
+    ├── planning/
+    └── control/
+```
+
+---
+
+## Ejecución Completa del Sistema
+
+### Flujo de trabajo típico
+
+**1. Iniciar simulación:**
+```bash
+ros2 launch go2_config gazebo_velodyne.launch.py world:=small_house
+```
+
+**2. Lanzar planificador:**
+```bash
+ros2 launch global_planner planner_with_map.launch.py
+```
+
+**3. Iniciar controlador:**
+```bash
+ros2 run trajectory_controller pid_controller
+```
+
+**4. Definir objetivo en RViz:**
+- Herramienta "2D Goal Pose"
+- Clic en el mapa
+
+**5. Observar ejecución:**
+- Gazebo: Movimiento real del robot
+- RViz: Trayectoria planificada (rojo)
+- Terminal: Métricas en tiempo real
