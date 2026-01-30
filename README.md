@@ -163,12 +163,15 @@ Debido a los problemas de mapeo, se realizó una corrección manual del mapa bas
 
 ```bash
 # Terminal 1 - Lanzar Gazebo con robot y LIDAR
+source install/setup.bash
 ros2 launch go2_config gazebo_velodyne.launch.py world:=small_house
 
 # Terminal 2 - Lanzar SLAM Toolbox
+source install/setup.bash
 ros2 launch go2_config slam.launch.py use_sim_time:=true
 
 # Terminal 3 - Teleoperación del robot
+source install/setup.bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
 # Guardar el mapa generado
@@ -286,9 +289,11 @@ El sistema cuenta con un launch file que inicia todos los componentes necesarios
 
 ```bash
 # Terminal 1 - Lanzar Gazebo con el robot
+source install/setup.bash
 ros2 launch go2_config gazebo_velodyne.launch.py world:=small_house
 
 # Terminal 2 - Lanzar planificador (incluye map_server, planner y RViz)
+source install/setup.bash
 ros2 launch global_planner planner_with_map.launch.py
 ```
 
@@ -477,9 +482,11 @@ Al completar la trayectoria, el controlador muestra un resumen completo:
 
 ```bash
 # Terminal 1 - Lanzar Gazebo con el robot
+source install/setup.bash
 ros2 launch go2_config gazebo_velodyne.launch.py world:=small_house
 
 # Terminal 2 - Lanzar planificador con mapa y RViz
+source install/setup.bash
 ros2 launch global_planner planner_with_map.launch.py
 
 # Terminal 3 - Lanzar controlador PID
@@ -596,16 +603,19 @@ proyecto-final-luis-jara/
 
 **1. Iniciar simulación:**
 ```bash
+source install/setup.bash
 ros2 launch go2_config gazebo_velodyne.launch.py world:=small_house
 ```
 
 **2. Lanzar planificador:**
 ```bash
+source install/setup.bash
 ros2 launch global_planner planner_with_map.launch.py
 ```
 
 **3. Iniciar controlador:**
 ```bash
+source install/setup.bash
 ros2 run trajectory_controller pid_controller
 ```
 
