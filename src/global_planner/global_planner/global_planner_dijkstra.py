@@ -396,14 +396,14 @@ class GlobalPlannerDijkstra(Node):
         
         # Convertir los waypoints de grilla a coordenadas del mundo
         path_msg = Path()
-        path_msg.header.frame_id = 'map'
+        path_msg.header.frame_id = 'odom'
         path_msg.header.stamp = self.get_clock().now().to_msg()
         
         for i, j in waypoints_grid:
             x, y = self.grid_to_world(i, j)
             
             pose = PoseStamped()
-            pose.header.frame_id = 'map'
+            pose.header.frame_id = 'odom'
             pose.header.stamp = path_msg.header.stamp
             pose.pose.position.x = x
             pose.pose.position.y = y

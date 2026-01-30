@@ -81,11 +81,21 @@ def generate_launch_description():
         ]
     )
     
+    # Transformación estática map -> odom (identidad)
+    # Esto sincroniza el mapa con la odometría del robot
+    static_tf_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='map_to_odom_publisher',
+        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom']
+    )
+    
     return LaunchDescription([
         declare_map_arg,
         declare_use_sim_time,
         map_server_node,
         lifecycle_manager_node,
+        static_tf_node,
         planner_node,
         rviz_node
     ])
